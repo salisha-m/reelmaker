@@ -1,0 +1,44 @@
+{
+  "name": "reelsmith",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AI video editor: upload footage, describe the edit, get a finished cut. Templates, reference-style matching, captions, beat sync, export.",
+  "scripts": {
+    "dev": "concurrently -k -n server,web \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "tsx watch --clear-screen=false server/src/index.ts",
+    "dev:web": "vite --config web/vite.config.ts",
+    "build": "vite build --config web/vite.config.ts",
+    "start": "tsx server/src/index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "tsx --test shared/test/*.test.ts server/test/*.test.ts",
+    "setup:python": "python3 -m venv .venv && .venv/bin/pip install -r server/py/requirements.txt"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "latest",
+    "@napi-rs/canvas": "^0.1.65",
+    "busboy": "^1.6.0",
+    "express": "^4.21.2",
+    "nanoid": "^5.0.9",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/busboy": "^1.5.4",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.5",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.2",
+    "lucide-react": "^0.474.0",
+    "postcss": "^8.5.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7",
+    "zustand": "^5.0.3"
+  }
+}
