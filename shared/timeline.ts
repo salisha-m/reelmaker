@@ -419,7 +419,7 @@ export function reorderItems(tl: Timeline, ids: ID[], target: { beforeId?: ID; a
   if (items.some((i) => i.trackId !== ref.trackId)) throw new OpError("TRACK_MISMATCH", "Reordering works inside one track. Move items to the same track first.");
   if (ids.includes(refId)) throw new OpError("INVALID_COMBINATION", "The reference item cannot be one of the items being moved.");
   assertUnlocked(tl, ref.trackId);
-  const all = itemsOnTrack(tl, ref.trackId).filter((i) => i.type !== "caption");
+  const all: Item[] = itemsOnTrack(tl, ref.trackId).filter((i) => i.type !== "caption");
   const startAt = all[0]?.display.from ?? 0;
   const rest = all.filter((i) => !ids.includes(i.id));
   const idx = rest.findIndex((i) => i.id === refId) + (target.afterId ? 1 : 0);
@@ -625,7 +625,12 @@ export function clipWords(item: MediaItem, tr: Transcription | null | undefined)
     for (const w of seg.words ?? []) {
       const s = Math.round(w.start * 1000), e = Math.round(w.end * 1000);
       const mid = (s + e) / 2;
-      if (mid >= item.trim.from && mid <= item.trim.to) out.push({ text: w.word.trim(), s, e });
+      if (!(mid >= item.trim.from && mid <= item.trim.to)) continue;
+      const text = w.word.trim();
+      const prev = out[out.length - 1];
+      // the recogniser sometimes splits "80%" or "$5" into two tokens; a symbol-only token belongs to its neighbour
+      if (prev && /^[%°.,!?;:)\]]+$/.test(text)) { prev.text += text; prev.e = e; continue; }
+      out.push({ text, s, e });
     }
   }
   return out;

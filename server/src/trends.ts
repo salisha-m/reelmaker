@@ -212,7 +212,8 @@ async function finishTrend(t: TrendDoc, assetId: string, meta: IngestMeta) {
   t.blueprint = bp;
   if (!t.niche.length) t.niche = t.source.hashtags.slice(0, 4);
   // keep the sound as a reusable track when the post is cut to music
-  if (bp.audio.hasMusic && a.hasAudio) {
+  // only posts that are driven by the music: a talking post's audio carries the creator's voice and cannot be reused as a sound
+  if (bp.audio.hasMusic && a.hasAudio && bp.audio.speechCoverage < 0.25) {
     try {
       const key = (t.sound?.title ? `${t.sound.title}|${t.sound.author ?? ""}` : `post:${t.id}`).toLowerCase();
       let s = db.list<Omit<TrendSound, "urls"> & { key?: string }>("sound").find((x) => x.key === key);
