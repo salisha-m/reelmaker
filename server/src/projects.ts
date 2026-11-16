@@ -39,10 +39,10 @@ export function addAssetsToProject(p: ProjectDoc, assetIds: string[]): ProjectDo
   }
   return p;
 }
-export function createProject(input: { name?: string; aspect?: string; assetIds?: string[]; trendId?: string | null; timeline?: Timeline; report?: RemixReport | null }): ProjectDoc {
+export function createProject(input: { name?: string; aspect?: string; assetIds?: string[]; trendId?: string | null; templateId?: string | null; timeline?: Timeline; report?: RemixReport | null }): ProjectDoc {
   const c = CANVAS_PRESETS.find((x) => x.id === (input.aspect ?? "9:16")) ?? CANVAS_PRESETS[0]!;
   const now = new Date().toISOString();
-  const p: ProjectDoc = { id: db.newId("p"), name: input.name?.trim() || "Untitled project", createdAt: now, updatedAt: now, templateId: null, styleId: "studio", trendId: input.trendId ?? null, assets: [], thumbnail: null, report: input.report ?? null };
+  const p: ProjectDoc = { id: db.newId("p"), name: input.name?.trim() || "Untitled project", createdAt: now, updatedAt: now, templateId: input.templateId ?? null, styleId: "studio", trendId: input.trendId ?? null, assets: [], thumbnail: null, report: input.report ?? null };
   addAssetsToProject(p, input.assetIds ?? []);
   db.put("project", p.id, p);
   db.put("timeline", p.id, input.timeline ?? T.emptyTimeline(c.width, c.height, 30));

@@ -13,6 +13,9 @@ export function anthropic(): Anthropic {
   if (!client) client = new Anthropic();
   return client;
 }
+let lastError: string | null = null;
+/** Why the most recent model request produced no answer, in words a user can act on. */
+export const lastLlmError = () => lastError;
 export const usageLog: { at: string; task: string; backend: string; inputTokens?: number; outputTokens?: number; costUsd?: number; ms: number }[] = [];
 
 function extractJson(text: string): unknown | null {
@@ -36,7 +39,8 @@ export interface JsonTask { task: string; system: string; prompt: string; imageP
 export async function jsonTask<T>(t: JsonTask): Promise<T | null> {
   const backend = llmBackend();
   const started = Date.now();
-  if (backend === "none") return null;
+  lastError = null;
+  if (backend === "none") { lastError = "No AI model is connected on this server."; return null; }
   try {
     if (backend === "anthropic-api") {
       const content: Anthropic.Beta.BetaContentBlockParam[] = [];
@@ -59,9 +63,11 @@ export async function jsonTask<T>(t: JsonTask): Promise<T | null> {
       });
       const msg = await stream.finalMessage();
       usageLog.push({ at: new Date().toISOString(), task: t.task, backend, inputTokens: msg.usage.input_tokens, outputTokens: msg.usage.output_tokens, ms: Date.now() - started });
-      if (msg.stop_reason === "refusal") return null;
+      if (msg.stop_reason === "refusal") { lastError = "The model declined this request."; return null; }
       const text = msg.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text").map((b) => b.text).join("\n");
-      return extractJson(text) as T | null;
+      const parsed = extractJson(text) as T | null;
+      if (!parsed) lastError = "The model's answer was not in the expected format.";
+      return parsed;
     }
     // claude-code backend
     if (!CLAUDE_BIN) return null;
@@ -73,19 +79,27 @@ export async function jsonTask<T>(t: JsonTask): Promise<T | null> {
       : `${t.prompt}\n\nAnswer with the JSON only.`;
     const args = ["-p", prompt, "--output-format", "json", "--system-prompt", t.system, "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}', "--max-turns", images.length ? String(Math.min(40, images.length + 4)) : "2", "--tools", images.length ? "Read" : ""];
     if (images.length) args.push("--allowedTools", "Read", "--add-dir", ...dirsToAdd);
-    if (t.model ?? process.env.AGENT_MODEL) args.push("--model", t.model ?? AGENT_MODEL);
+    // name the model: the CLI's own default may be a different model with its own usage limit
+    args.push("--model", t.model ?? (images.length ? VISION_MODEL : AGENT_MODEL));
     args.push("--effort", t.effort ?? "low");
     const r = await run(CLAUDE_BIN, args, { cwd, timeoutMs: t.timeoutMs ?? 240_000 });
     fs.rmSync(cwd, { recursive: true, force: true });
     const outer = extractJson(r.stdout) as { result?: string; total_cost_usd?: number; usage?: { input_tokens?: number; output_tokens?: number }; is_error?: boolean } | null;
     usageLog.push({ at: new Date().toISOString(), task: t.task, backend, costUsd: outer?.total_cost_usd, inputTokens: outer?.usage?.input_tokens, outputTokens: outer?.usage?.output_tokens, ms: Date.now() - started });
-    if (!outer || outer.is_error || typeof outer.result !== "string") { console.warn(`[llm] ${t.task}: no usable answer (${r.code}) ${r.stderr.slice(0, 200)}`); return null; }
-    return extractJson(outer.result) as T | null;
+    if (!outer || outer.is_error || typeof outer.result !== "string") {
+      lastError = outer?.is_error && typeof outer.result === "string" ? outer.result : `Claude Code returned no answer (exit ${r.code}).`;
+      console.warn(`[llm] ${t.task}: ${lastError} ${r.stderr.slice(0, 200)}`);
+      return null;
+    }
+    const parsed = extractJson(outer.result) as T | null;
+    if (!parsed) lastError = "The model's answer was not in the expected format.";
+    return parsed;
   } catch (err) {
-    if (err instanceof Anthropic.AuthenticationError) console.warn(`[llm] ${t.task}: the API key was rejected`);
-    else if (err instanceof Anthropic.RateLimitError) console.warn(`[llm] ${t.task}: rate limited`);
-    else if (err instanceof Anthropic.APIError) console.warn(`[llm] ${t.task}: API error ${err.status}: ${err.message}`);
-    else console.warn(`[llm] ${t.task}: ${(err as Error).message}`);
+    if (err instanceof Anthropic.AuthenticationError) lastError = "The API key was rejected. Check ANTHROPIC_API_KEY on the server.";
+    else if (err instanceof Anthropic.RateLimitError) lastError = "The model is rate limited right now. Try again in a moment.";
+    else if (err instanceof Anthropic.APIError) lastError = `The model returned an error (${err.status}).`;
+    else lastError = (err as Error).message;
+    console.warn(`[llm] ${t.task}: ${lastError}`);
     return null;
   }
 }

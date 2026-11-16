@@ -2,15 +2,15 @@
 // editor's own buttons, so every path edits the timeline the same way.
 import { z } from "zod/v4";
 import type { CaptionItem, CaptionStyle, Item, MediaItem, TextItem, Timeline, TransitionKind } from "../../../shared/types.ts";
-import { CANVAS_PRESETS, CAPTION_TEMPLATES, EFFECT_INFO, EXPORT_PRESETS, FILTERS, FONT_FAMILIES, TRANSITION_KINDS, captionTemplate, resolveFamily } from "../../../shared/catalog.ts";
+import { CANVAS_PRESETS, CAPTION_TEMPLATES, EFFECT_INFO, EXPORT_PRESETS, FILTERS, FONT_FAMILIES, TEMPLATES, TRANSITION_KINDS, captionTemplate, resolveFamily } from "../../../shared/catalog.ts";
 import * as T from "../../../shared/timeline.ts";
 import * as db from "../db.ts";
 import { emit } from "../events.ts";
 import { getAsset, type AssetDoc } from "../pipeline.ts";
 import { captureFrame } from "../render.ts";
 import { getTrend, listTrends, sentencesOf } from "../trends.ts";
-import { remix } from "../autopilot.ts";
-import { getProject, getTimeline, saveTimeline, projectAssets, startExport, type ProjectDoc } from "../projects.ts";
+import { remix, templateBlueprint, templateById } from "../autopilot.ts";
+import { getProject, getTimeline, saveProject, saveTimeline, projectAssets, startExport, type ProjectDoc } from "../projects.ts";
 
 export interface ToolContext { projectId: string; selection?: string[]; playheadMs?: number; rangeMs?: { from: number; to: number } | null }
 export interface ToolResult { ok: boolean; [k: string]: unknown; images?: { mime: string; data: Buffer; label: string }[] }
@@ -93,9 +93,10 @@ def({
 });
 def({
   name: "listLooks", label: "Checking the looks", mutates: false,
-  description: "List what can be applied: caption looks (with where each is commonly seen), fonts, colour filters, effects, transitions, canvas sizes and export presets.",
+  description: "List what can be applied: templates (structures such as Short Talking Head or Vlog), caption looks (with where each is commonly seen), fonts, colour filters, effects, transitions, canvas sizes and export presets.",
   schema: z.object({}),
   run: () => ({
+    templates: TEMPLATES.map((t) => ({ id: t.id, name: t.name, description: t.description, bestFor: t.bestFor, length: t.length, aspect: t.aspect })),
     captionLooks: CAPTION_TEMPLATES.map((c) => ({ id: c.id, name: c.name, seenIn: c.seenIn, description: c.description })), fonts: FONT_FAMILIES,
     filters: FILTERS.map((f) => ({ id: f.id, name: f.name, description: f.description })), effects: Object.entries(EFFECT_INFO).map(([id, e]) => ({ id, range: `${e.min}..${e.max}${e.unit}`, description: e.description })),
     transitions: TRANSITION_KINDS, canvas: CANVAS_PRESETS.map((c) => c.id), exportPresets: EXPORT_PRESETS.map((p) => ({ id: p.id, name: p.name, description: p.description })),
@@ -418,6 +419,23 @@ def({
     const keepVersion = ctx.tl.version;
     for (const k of Object.keys(ctx.tl) as (keyof Timeline)[]) delete (ctx.tl as unknown as Record<string, unknown>)[k];
     Object.assign(ctx.tl, r.timeline, { version: keepVersion });
+    return { built: r.report };
+  },
+});
+def({
+  name: "applyTemplate", label: "Applying a template", mutates: true,
+  description: "Rebuild this project's edit with a built-in template (see listLooks): short-talking-head, vlog, long-podcast or beat-montage. The template sets the structure, pacing, captions and music behaviour. Replaces the current timeline.",
+  schema: z.object({ templateId: z.string(), assetIds: z.array(z.string()).optional().describe("Footage to use. Default: everything in the project"), musicAssetId: z.string().optional(), targetSeconds: z.number().optional(), captionLook: z.string().optional(), hookText: z.string().nullable().optional() }),
+  run: (ctx, i) => {
+    const t = templateById(i.templateId);
+    if (!t) throw new T.OpError("TEMPLATE_NOT_FOUND", `There is no template '${i.templateId}'. Templates: ${TEMPLATES.map((x) => x.id).join(", ")}.`);
+    const use = (i.assetIds?.length ? i.assetIds.map((id) => asset(ctx, id)) : Object.values(ctx.byAgent)).filter((a) => a.contentType !== "music");
+    const music = i.musicAssetId ? asset(ctx, i.musicAssetId) : t.defaults.musicOn ? Object.values(ctx.byAgent).find((a) => a.contentType === "music") ?? null : null;
+    const r = remix({ blueprint: templateBlueprint(t), template: t, assets: use, musicAsset: music, targetSeconds: i.targetSeconds, captionLook: i.captionLook, hookText: i.hookText });
+    const keepVersion = ctx.tl.version;
+    for (const k of Object.keys(ctx.tl) as (keyof Timeline)[]) delete (ctx.tl as unknown as Record<string, unknown>)[k];
+    Object.assign(ctx.tl, r.timeline, { version: keepVersion });
+    ctx.project.templateId = t.id; ctx.project.trendId = null; saveProject(ctx.project);
     return { built: r.report };
   },
 });

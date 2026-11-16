@@ -11,12 +11,15 @@ or by telling the built-in assistant what you want.
 | --- | --- |
 | **Trends** | Add a TikTok / Reel / Short by link or by uploading the saved video. Each post is analysed into a blueprint: hook (spoken + on screen) and its reusable formula, every cut with timing, cuts-on-beat %, BPM and beat grid, caption look, structure, "why it works", and how to make your own. Music-driven posts keep their sound as a reusable track. A watchlist ranks recent posts from accounts/hashtags by views per hour. |
 | **What to post** | Ideas matched to your trend library, your niche profile and the footage you already have, with a shot list and what is still missing. Rule-based instantly, or written by AI. |
-| **Autopilot** | Pick a trend (or "hook-first"), pick clips, press *Make the video*. Talking formats: strongest line moved to the front, pauses / fillers / restarts removed from the transcript, punch-ins on cuts, b-roll matched to what is said, captions, on-screen hook, sound ducked under the voice. Montage formats: the original post's cut points reproduced on its sound, or cuts placed on the beat grid of any track. |
+| **Templates** | Short Talking Head, Vlog, Long Podcast and Beat Montage, each with its own assembly: the vlog runs in recording order with talking parts tightened and b-roll cut so every cut lands on the beat; the podcast keeps the whole conversation in order at 16:9 with music only on the intro and outro. Short tracks loop on whole bars so the beat grid carries on. |
+| **Autopilot** | Pick a trend or a template, pick clips, press *Make the video*. Talking formats: strongest line moved to the front, pauses / fillers / restarts removed from the transcript, punch-ins on cuts, b-roll matched to what is said, captions, on-screen hook, sound ducked under the voice. Montage formats: the original post's cut points reproduced on its sound, or cuts placed on the beat grid of any track. |
 | **Caption looks** | 15 looks modelled on what short-form creators actually post with (Montserrat Black keyword highlight, word box karaoke, TikTok Sans line boxes, Bangers pop, Rubik karaoke, typewriter build-up, Instrument Serif lower case, Bebas tall caps...). Word-level timing, spoken-word highlight, emphasis words. All fonts are bundled and open-licensed. |
 | **Editor** | Multi-track timeline (drag, trim, split, ripple delete, undo/redo), live canvas preview with audio, drag text and captions on the canvas, inspector (volume, speed, zoom, filters, fonts), per-word caption fixes, export presets. |
-| **Assistant** | Chat that edits the same timeline through 26 tools (cut by quoted words, tighten, caption, music, beat sync, transitions, grade, resize, apply a trend, export). Each change can be undone as a unit. |
+| **Assistant** | Chat that edits the same timeline through 27 tools (cut by quoted words, tighten, caption, music, beat sync, transitions, grade, resize, apply a trend or template, export). The project's template or trend is part of every request. Each change can be undone as a unit. |
 | **MCP** | The same tools at `POST /mcp` so Claude Code, Cursor or any MCP client can drive the editor. |
 | **Export** | H.264 MP4 or VP9 WebM, 480p to 4K, from the original files. Preview and export are drawn by the same compositor code, so what you see is what you get. Option to export without the music so the official sound can be added in-app. |
+
+How Vyra works and how this compares: [docs/VYRA_TEARDOWN.md](docs/VYRA_TEARDOWN.md).
 
 ## Run it
 
@@ -41,7 +44,7 @@ Everything except the assistant, AI ideas, AI planning and the frame read works 
 | Setting | Effect |
 | --- | --- |
 | `ANTHROPIC_API_KEY` | Uses the Claude API through the official SDK (streaming, adaptive thinking, prompt caching, server-side refusal fallback). |
-| *(none, `claude` CLI installed and signed in)* | Uses Claude Code in headless mode, driving the editor through this server's MCP endpoint. |
+| *(none, `claude` CLI installed and signed in)* | Uses Claude Code in headless mode, driving the editor through this server's MCP endpoint. The model named in `AGENT_MODEL` is always passed explicitly. |
 | `AI_BACKEND=none` | Turns AI off. |
 | `AGENT_MODEL`, `VISION_MODEL` | Model ids. Default `claude-opus-5-5` for both. |
 | `AGENT_EFFORT` | `low` \| `medium` \| `high`. Default `medium`. |

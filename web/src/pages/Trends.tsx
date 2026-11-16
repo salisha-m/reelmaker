@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Play, Pause, Music2, Eye, Heart, Trash2, Wand2, Link2, Radar, RefreshCw, Scissors, MessageSquareQuote, Type, Clock, Flame } from "lucide-react";
+import { Plus, Play, Pause, Music2, Eye, Heart, Trash2, Wand2, Link2, Radar, RefreshCw, Scissors, MessageSquareQuote, Type, Clock, Flame, Sparkles } from "lucide-react";
 import type { TrendCandidate, TrendPost, TrendSound, WatchSource } from "@shared/trends";
 import { captionTemplate } from "@shared/catalog";
 import { api, upload } from "../api";
@@ -55,7 +55,10 @@ function CutStrip({ t }: { t: TrendPost }) {
 }
 
 function TrendDetail({ t, onClose }: { t: TrendPost; onClose: () => void }) {
-  const { toast, sounds } = useApp();
+  const { toast, sounds, status } = useApp();
+  const [deepBusy, setDeepBusy] = useState(false);
+  const ai = status?.ai.backend !== "none";
+  const deep = async () => { setDeepBusy(true); try { await api.deepenTrend(t.id); toast("Frames read: on-screen text, caption look and why it works are updated.", "ok"); } catch (e) { toast((e as Error).message, "error"); } finally { setDeepBusy(false); } };
   const b = t.blueprint;
   const sound = sounds.find((s) => s.id === t.soundId);
   const look = b ? captionTemplate(b.captions.look) : null;
@@ -64,6 +67,7 @@ function TrendDetail({ t, onClose }: { t: TrendPost; onClose: () => void }) {
     <Modal title={t.title} onClose={onClose} wide footer={<>
       <button className="btn-quiet mr-auto text-hot hover:text-hot" onClick={async () => { await api.deleteTrend(t.id); toast("Trend removed"); onClose(); }}><Trash2 size={14} />Remove</button>
       {t.source.url && <a className="btn-ghost" href={t.source.url} target="_blank" rel="noreferrer"><Link2 size={14} />Original post</a>}
+      {b && b.source !== "vision" && ai && <button className="btn-ai" disabled={deepBusy || t.status === "analyzing"} onClick={deep} title="Reads on-screen text and the caption look, and explains why it works. Uses model credit.">{deepBusy || t.status === "analyzing" ? <Spinner /> : <Sparkles size={14} />}Read frames with AI</button>}
       <button className="btn-primary" disabled={!b} onClick={() => go(`/create?trend=${t.id}`)}><Wand2 size={15} />Make my version</button>
     </>}>
       <div className="grid gap-6 md:grid-cols-[280px_1fr]">

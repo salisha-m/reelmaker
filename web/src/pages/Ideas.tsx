@@ -13,7 +13,7 @@ export function Ideas() {
   const ai = status?.ai.backend !== "none";
   useEffect(() => { api.profile().then((r) => setProfile(r.profile)).catch(() => undefined); }, []);
   const save = async (patch: Partial<CreatorProfile>) => { if (!profile) return; const next = { ...profile, ...patch }; setProfile(next); await api.saveProfile(next).catch(() => undefined); };
-  const run = async (withAi: boolean) => { setBusy(withAi ? "ai" : "rules"); try { await api.refreshIdeas(withAi); await refresh("ideas"); } catch (e) { toast((e as Error).message, "error"); } finally { setBusy(null); } };
+  const run = async (withAi: boolean) => { setBusy(withAi ? "ai" : "rules"); try { const r = await api.refreshIdeas(withAi); if (r.warning) toast(r.warning, "info"); await refresh("ideas"); } catch (e) { toast((e as Error).message, "error"); } finally { setBusy(null); } };
   const footage = assets.filter((a) => a.contentType !== "music");
   return (
     <div className="h-full overflow-y-auto">

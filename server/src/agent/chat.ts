@@ -13,6 +13,7 @@ import * as db from "../db.ts";
 import { anthropic, usageLog } from "../llm.ts";
 import { getProject, restoreSnapshot, snapshot } from "../projects.ts";
 import { getTrend } from "../trends.ts";
+import { templateById } from "../autopilot.ts";
 import { TOOLS, runTool, toolByName, toolJsonSchema, type ToolContext } from "./tools.ts";
 
 export const SYSTEM_PROMPT = `You are the editor inside ${APP_NAME}, a video editor for short-form creators. You edit the user's real footage on a real timeline by calling tools. You never generate footage and never describe an edit you did not make.
@@ -60,6 +61,8 @@ function editorState(ctx: ToolContext): string {
   if (ctx.rangeMs) parts.push(`highlighted range ${(ctx.rangeMs.from / 1000).toFixed(2)}-${(ctx.rangeMs.to / 1000).toFixed(2)}s`);
   const trend = p?.trendId ? getTrend(p.trendId) : null;
   if (trend?.blueprint) parts.push(`project built from trend "${trend.title}" (${trend.blueprint.format}, hook: ${trend.blueprint.hook.type})`);
+  const tpl = templateById(p?.templateId);
+  if (tpl) parts.push(`template "${tpl.name}" (follow it unless the user asks otherwise). Structure: ${tpl.guidance.structure} Pacing: ${tpl.guidance.pacing} Captions: ${tpl.guidance.captions} B-roll: ${tpl.guidance.broll} Ending: ${tpl.guidance.ending}`);
   return parts.length ? `[Editor state: ${parts.join("; ")}]\n` : "";
 }
 function summarize(name: string, result: Record<string, unknown>): string {
@@ -187,7 +190,8 @@ async function claudeCodeTurn(ctx: ToolContext, chat: ChatDoc, userText: string,
   if (ctx.rangeMs) q.set("range", `${Math.round(ctx.rangeMs.from)}-${Math.round(ctx.rangeMs.to)}`);
   const mcp = JSON.stringify({ mcpServers: { editor: { type: "http", url: `http://127.0.0.1:${PORT}/mcp?${q.toString()}` } } });
   const args = ["-p", editorState(ctx) + userText, "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--system-prompt", SYSTEM_PROMPT, "--mcp-config", mcp, "--strict-mcp-config", "--tools", "", "--allowedTools", "mcp__editor", "--effort", AGENT_EFFORT, "--max-turns", "60"];
-  if (process.env.AGENT_MODEL) args.push("--model", AGENT_MODEL);
+  // name the model: the CLI's own default may be a different model with its own usage limit
+  args.push("--model", AGENT_MODEL);
   if (chat.cliSession) args.push("--resume", chat.cliSession);
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "rs-chat-"));
   const child = spawn(CLAUDE_BIN, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });

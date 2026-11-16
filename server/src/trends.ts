@@ -9,7 +9,7 @@ import * as db from "./db.ts";
 import { emit } from "./events.ts";
 import { extractFrames, ffmpeg, run } from "./media.ts";
 import { assetPaths, createAsset, getAsset, publicAsset, whenProcessed, type AssetDoc } from "./pipeline.ts";
-import { jsonTask } from "./llm.ts";
+import { jsonTask, lastLlmError } from "./llm.ts";
 
 type TrendDoc = Omit<TrendPost, "urls">;
 const median = (a: number[]) => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]!; };
@@ -300,6 +300,28 @@ export async function ingestTrendUrl(url: string, meta: IngestMeta = {}): Promis
       for (const f of fs.readdirSync(dirs.tmp)) if (f.startsWith(`dl_${t.id}`)) fs.rmSync(path.join(dirs.tmp, f), { force: true });
     }
   })();
+  return t;
+}
+
+/** Read an imported post's frames with AI after the fact: on-screen text, caption look, why it works. */
+export async function deepenTrend(id: string): Promise<TrendDoc> {
+  const t = getTrend(id);
+  if (!t?.assetId) throw new Error("That trend has no video to read.");
+  const a = getAsset(t.assetId);
+  if (!a) throw new Error("The trend's video is missing.");
+  if (llmBackend() === "none") throw new Error("No AI model is connected on this server.");
+  const prev = t.status;
+  t.status = "analyzing"; saveTrend(t);
+  try {
+    const base = buildBlueprint(a);
+    const v = await visionRead(a, base, { caption: t.source.caption, stats: t.stats });
+    if (!v) throw new Error(lastLlmError() ?? "The AI did not return a usable reading. Try again.");
+    t.blueprint = applyVision(base, v);
+    if (v.niche?.length) t.niche = v.niche.map(String).slice(0, 5);
+    if (v.title && (t.source.platform === "upload" || /^[\w-]+$/.test(t.title))) t.title = String(v.title);
+    t.status = "ready"; t.error = null;
+  } catch (e) { t.status = prev === "error" ? "error" : "ready"; saveTrend(t); throw e; }
+  saveTrend(t);
   return t;
 }
 

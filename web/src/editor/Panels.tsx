@@ -264,7 +264,7 @@ export function ReportPanel() {
     <div className="h-full space-y-3 overflow-y-auto p-3">
       <div className="flex items-center gap-2 text-[13px] font-semibold"><Wand2 size={14} className="text-accent" />What Autopilot built</div>
       <div className="divide-y divide-line rounded-xl border border-line bg-bg px-3">
-        <Row k="Type" v={r.mode === "talking" ? "Talking edit" : "Montage"} /><Row k="Length" v={`${r.durationSeconds.toFixed(1)}s`} /><Row k="Clips" v={`${r.clips}${r.brollInserts ? ` + ${r.brollInserts} b-roll` : ""}`} />
+        <Row k="Type" v={r.mode === "talking" ? "Talking edit" : r.mode === "vlog" ? "Vlog" : "Montage"} /><Row k="Length" v={`${r.durationSeconds.toFixed(1)}s`} /><Row k="Clips" v={r.mode === "vlog" ? `${r.clips} (${r.brollInserts} b-roll)` : `${r.clips}${r.brollInserts ? ` + ${r.brollInserts} b-roll` : ""}`} />
         {r.cutsRemoved > 0 && <Row k="Tightened" v={`${r.cutsRemoved} cuts, ${r.secondsRemoved}s removed`} />}
         {r.captions > 0 && <Row k="Captions" v={`${r.captions} · ${r.captionLook}`} />}{r.music && <Row k="Sound" v={<span className="break-all">{r.music}</span>} />}<Row k="Planned by" v={r.planner === "ai" ? "AI" : "Rules"} />
       </div>

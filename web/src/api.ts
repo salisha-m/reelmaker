@@ -1,4 +1,4 @@
-import type { Asset, ChatMessage, Project, ProjectAsset, RenderJob, Timeline, CaptionStyle } from "@shared/types";
+import type { Asset, ChatMessage, Project, ProjectAsset, RenderJob, Template, Timeline, CaptionStyle } from "@shared/types";
 import type { CreatorProfile, Idea, RemixReport, TrendCandidate, TrendPost, TrendSound, WatchSource } from "@shared/trends";
 import type { CaptionTemplate, ExportPreset, FilterPreset } from "@shared/catalog";
 
@@ -9,7 +9,7 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   if (!res.ok) throw new ApiError(res.status, json);
   return json as T;
 }
-export interface Catalog { captionLooks: CaptionTemplate[]; fonts: { family: string; weight: number; file: string; key: string; url: string }[]; filters: FilterPreset[]; exportPresets: ExportPreset[]; canvasPresets: { id: string; label: string; width: number; height: number }[]; transitions: string[] }
+export interface Catalog { templates: Template[]; captionLooks: CaptionTemplate[]; fonts: { family: string; weight: number; file: string; key: string; url: string }[]; filters: FilterPreset[]; exportPresets: ExportPreset[]; canvasPresets: { id: string; label: string; width: number; height: number }[]; transitions: string[] }
 export interface Status { app: string; ai: { backend: "anthropic-api" | "claude-code" | "none"; model: string; calls: number; costUsd: number }; counts: { assets: number; trends: number; projects: number } }
 export type ProjectInfo = Project & { trendId: string | null; report?: RemixReport | null };
 export interface ProjectPayload { project: ProjectInfo; timeline: Timeline; assets: ProjectAsset[] }
@@ -38,6 +38,7 @@ export const api = {
   trend: (id: string) => req<{ trend: TrendPost; asset: Asset | null }>("GET", `/api/trends/${id}`),
   addTrendUrl: (url: string, deep: boolean) => req<{ trend: TrendPost }>("POST", "/api/trends/url", { url, deep }),
   deleteTrend: (id: string) => req("DELETE", `/api/trends/${id}`),
+  deepenTrend: (id: string) => req<{ trend: TrendPost }>("POST", `/api/trends/${id}/deep`),
   watch: () => req<{ sources: WatchSource[]; candidates: TrendCandidate[] }>("GET", "/api/watch"),
   addWatch: (b: { platform: string; kind: string; value: string }) => req<{ source: WatchSource }>("POST", "/api/watch", b),
   deleteWatch: (id: string) => req("DELETE", `/api/watch/${id}`),
@@ -45,7 +46,7 @@ export const api = {
   profile: () => req<{ profile: CreatorProfile }>("GET", "/api/profile"),
   saveProfile: (p: Partial<CreatorProfile>) => req<{ profile: CreatorProfile }>("PUT", "/api/profile", p),
   ideas: () => req<{ ideas: Idea[] }>("GET", "/api/ideas"),
-  refreshIdeas: (ai: boolean) => req<{ ideas: Idea[] }>("POST", "/api/ideas/refresh", { ai }),
+  refreshIdeas: (ai: boolean) => req<{ ideas: Idea[]; warning?: string }>("POST", "/api/ideas/refresh", { ai }),
   autopilot: (b: Record<string, unknown>) => req<ProjectPayload & { report: RemixReport }>("POST", "/api/autopilot", b),
 };
 

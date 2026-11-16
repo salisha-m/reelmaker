@@ -9,11 +9,11 @@ import * as T from "../../shared/timeline.ts";
 import { DATA_DIR, FONTS_DIR, PORT, ROOT, dirs } from "./config.ts";
 import * as db from "./db.ts";
 import { bus, emit, type AppEvent } from "./events.ts";
-import { aiStatus } from "./llm.ts";
+import { aiStatus, lastLlmError } from "./llm.ts";
 import { createAsset, deleteAsset, enqueue, getAsset, listAssets, publicAsset, type AssetDoc } from "./pipeline.ts";
 import { addAssetsToProject, cancelRender, createProject, deleteProject, getProject, getRender, getTimeline, listProjects, listRenders, listSnapshots, publicProject, publicProjectAssets, restoreSnapshot, saveProject, saveTimeline, snapshot, startExport } from "./projects.ts";
-import { addSource, deleteTrend, getTrend, ingestTrendFile, ingestTrendUrl, listCandidates, listSounds, listSources, listTrends, publicSound, publicTrend, refreshSource } from "./trends.ts";
-import { aiPlan, getProfile, listIdeas, remix, suggestIdeas } from "./autopilot.ts";
+import { addSource, deepenTrend, deleteTrend, getTrend, ingestTrendFile, ingestTrendUrl, listCandidates, listSounds, listSources, listTrends, publicSound, publicTrend, refreshSource } from "./trends.ts";
+import { aiPlan, getProfile, listIdeas, remix, suggestIdeas, templateBlueprint, templateById } from "./autopilot.ts";
 import { TOOLS, runTool, searchAssets, toolJsonSchema, type ToolContext } from "./agent/tools.ts";
 import { clearChat, getChat, revertTurn, runChatTurn, SYSTEM_PROMPT } from "./agent/chat.ts";
 import { captureFrame, registerFonts } from "./render.ts";
@@ -187,6 +187,7 @@ app.post("/api/trends/upload", wrap(async (req, res) => {
   res.status(202).json({ trends: out });
 }));
 app.delete("/api/trends/:id", (req, res) => { deleteTrend(req.params.id!); res.json({ ok: true }); });
+app.post("/api/trends/:id/deep", wrap(async (req, res) => { try { res.json({ trend: publicTrend(await deepenTrend(req.params.id!)) }); } catch (e) { fail(res, 422, (e as Error).message); } }));
 app.get("/api/watch", (_req, res) => res.json({ sources: listSources(), candidates: listCandidates().slice(0, 100) }));
 app.post("/api/watch", (req, res) => { const b = req.body ?? {}; if (!b.value) return fail(res, 400, "Enter an account, hashtag or link."); res.status(201).json({ source: addSource({ platform: b.platform ?? "tiktok", kind: b.kind ?? "account", value: String(b.value) }) }); });
 app.delete("/api/watch/:id", (req, res) => { db.del("watch", req.params.id!); res.json({ ok: true }); });
@@ -196,24 +197,35 @@ app.post("/api/watch/:id/refresh", wrap(async (req, res) => res.json(await refre
 app.get("/api/profile", (_req, res) => res.json({ profile: getProfile() }));
 app.put("/api/profile", (req, res) => { const p = { ...getProfile(), ...(req.body ?? {}) } as CreatorProfile; db.put("settings", "profile", p); res.json({ profile: p }); });
 app.get("/api/ideas", (_req, res) => res.json({ ideas: listIdeas() }));
-app.post("/api/ideas/refresh", wrap(async (req, res) => res.json({ ideas: await suggestIdeas(libraryAssets().filter((a) => a.status === "ready" && a.contentType !== "music"), { ai: req.body?.ai !== false }) })));
+app.post("/api/ideas/refresh", wrap(async (req, res) => res.json(await suggestIdeas(libraryAssets().filter((a) => a.status === "ready" && a.contentType !== "music"), { ai: req.body?.ai !== false }))));
 app.post("/api/autopilot", wrap(async (req, res) => {
   const b = req.body ?? {};
   const assets = (Array.isArray(b.assetIds) ? b.assetIds : []).map((id: string) => getAsset(id)).filter((a: AssetDoc | null): a is AssetDoc => !!a && a.status === "ready");
   if (!assets.length) return fail(res, 400, "Pick at least one clip that has finished processing.");
   const trend = b.trendId ? getTrend(b.trendId) : null;
   if (b.trendId && !trend?.blueprint) return fail(res, 404, "That trend has not finished analysing yet.");
+  const template = trend ? null : templateById(b.templateId);
+  if (b.templateId && !trend && !template) return fail(res, 404, "There is no template with that id.");
+  const notes: string[] = [];
   let music: AssetDoc | null = null;
   if (b.soundId) { const s = listSounds().find((x) => x.id === b.soundId); music = s ? getAsset(s.assetId) : null; }
   else if (b.musicAssetId) music = getAsset(b.musicAssetId);
   else if (b.music !== "none" && trend?.soundId && trend.blueprint?.audio.hasMusic) { const s = listSounds().find((x) => x.id === trend.soundId); music = s ? getAsset(s.assetId) : null; }
   const footage = assets.filter((a: AssetDoc) => a.contentType !== "music");
   if (!music) music = assets.find((a: AssetDoc) => a.contentType === "music") ?? null;
-  const opts = { blueprint: trend?.blueprint ?? null, assets: footage, musicAsset: music, targetSeconds: b.targetSeconds ? Number(b.targetSeconds) : undefined, captionLook: b.captionLook || undefined, captions: b.captions, hookText: b.hookText === "" ? undefined : b.hookText, aspect: b.aspect, topic: b.topic, profile: getProfile() };
+  // a template that runs on music gets the sound your tracked posts use most, then your own tracks
+  if (!music && b.music !== "none" && template?.defaults.musicOn) {
+    const top = listSounds()[0];
+    music = top ? getAsset(top.assetId) : libraryAssets().find((a) => a.contentType === "music" && a.status === "ready") ?? null;
+    if (music) notes.push(top ? `Used "${top.title}", the sound most used in your tracked posts. Pick another under Sound.` : `Used "${music.name}" from your library. Pick another under Sound.`);
+  }
+  const opts = { blueprint: trend?.blueprint ?? (template ? templateBlueprint(template) : null), template, assets: footage, musicAsset: music, targetSeconds: b.targetSeconds ? Number(b.targetSeconds) : undefined, captionLook: b.captionLook || undefined, captions: typeof b.captions === "boolean" ? b.captions : undefined, hookText: b.hookText === "" ? undefined : b.hookText, aspect: b.aspect || template?.aspect, topic: b.topic, profile: getProfile() };
   const plan = b.useAi === false ? null : await aiPlan(opts);
+  if (b.useAi !== false && !plan) notes.push(`AI planning was not available (${lastLlmError() ?? "no answer"}), so the edit was built with rules.`);
   try {
     const { timeline, report } = remix({ ...opts, plan, title: b.name });
-    const p = createProject({ name: b.name || (report.title && report.title !== "New edit" ? report.title : trend ? `${trend.title} · my version` : "New edit"), assetIds: [...footage.map((a: AssetDoc) => a.id), ...(music ? [music.id] : [])], trendId: trend?.id ?? null, timeline, report });
+    report.notes.unshift(...notes);
+    const p = createProject({ templateId: template?.id ?? null, name: b.name || (report.title && report.title !== "New edit" ? report.title : trend ? `${trend.title} · my version` : template ? `${template.name} · ${footage.length} clip${footage.length === 1 ? "" : "s"}` : "New edit"), assetIds: [...footage.map((a: AssetDoc) => a.id), ...(music ? [music.id] : [])], trendId: trend?.id ?? null, timeline, report });
     res.status(201).json({ ...projectPayload(p.id), report });
   } catch (e) { fail(res, 422, (e as Error).message); }
 }));
