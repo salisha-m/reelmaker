@@ -1,6 +1,6 @@
 # Vyra teardown
 
-How Vyra (usevyra.com) works, from what is publicly observable, and how Reelsmith compares.
+How Vyra (usevyra.com) works, from what is publicly observable, and how Reelmaker compares.
 Gathered November 2026.
 
 ## What was examined
@@ -84,9 +84,9 @@ Notable details: `addMedia` accepts a `transcriptRange` (cut by quoted words); `
 returns beats with strength filters and subdivisions; errors carry codes and the next free position
 on a track, so the model can correct itself.
 
-## Reelsmith compared
+## Reelmaker compared
 
-| Capability | Vyra | Reelsmith |
+| Capability | Vyra | Reelmaker |
 | --- | --- | --- |
 | Upload and index footage (transcript, scenes, proxy, beats) | Yes | Yes (Whisper word timestamps, shot detection and motion, librosa beat grid; optional vision descriptions) |
 | Chat agent editing a real timeline | Yes, 54 tools | Yes, 27 tools on the same model: read, cut by quoted words, tighten, captions, music ducking, beat sync, transitions, grade, resize, templates, trends, export; undo per turn |

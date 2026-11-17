@@ -1,6 +1,6 @@
 import type { CaptionStyle, Template, TextStyle, VideoStyle, ExportSettings } from "./types.ts";
 
-export const APP_NAME = "Reelsmith";
+export const APP_NAME = "Reelmaker";
 
 // ---------- fonts (all bundled as TTF under assets/fonts, OFL licensed) ----------
 export interface FontFace { family: string; weight: number; file: string }

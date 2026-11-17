@@ -1,4 +1,4 @@
-# Reelsmith
+# Reelmaker
 
 Trend-driven short-form video maker. It tracks posts that are already performing, breaks each one
 down into the parts you can reuse (hook, cut rhythm, caption look, sound), tells you what to post,
@@ -55,7 +55,7 @@ Other settings: `PORT` (8787), `DATA_DIR` (`./data`), `WHISPER_LANGUAGE` (auto).
 ### Connect an outside agent
 
 ```bash
-claude mcp add --transport http reelsmith http://127.0.0.1:8787/mcp
+claude mcp add --transport http reelmaker http://127.0.0.1:8787/mcp
 ```
 
 ## How it is built
